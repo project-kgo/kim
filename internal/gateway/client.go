@@ -29,8 +29,7 @@ func NewClient(cfg Config) (*Client, error) {
 		return nil, errors.New("gateway socket path is required")
 	}
 
-	conn, err := grpc.DialContext(
-		context.Background(),
+	conn, err := grpc.NewClient(
 		UnixTarget(socketPath),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)

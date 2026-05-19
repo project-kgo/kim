@@ -3,6 +3,8 @@ package kim
 import (
 	"errors"
 	"strings"
+
+	"github.com/project-kgo/kim/data"
 )
 
 const (
@@ -13,6 +15,9 @@ const (
 type Options struct {
 	RoutePrefix   string
 	GatewaySocket string
+	RedisDSN      string
+	DBDSN         string
+	DataClient    *data.Client
 }
 
 type Option func(*Options) error
@@ -27,6 +32,30 @@ func WithRoutePrefix(prefix string) Option {
 func WithGatewaySocket(path string) Option {
 	return func(opts *Options) error {
 		opts.GatewaySocket = strings.TrimSpace(path)
+		return nil
+	}
+}
+
+func WithRedisDSN(dsn string) Option {
+	return func(opts *Options) error {
+		opts.RedisDSN = strings.TrimSpace(dsn)
+		return nil
+	}
+}
+
+func WithDBDSN(dsn string) Option {
+	return func(opts *Options) error {
+		opts.DBDSN = strings.TrimSpace(dsn)
+		return nil
+	}
+}
+
+func WithDataClient(client *data.Client) Option {
+	return func(opts *Options) error {
+		if client == nil {
+			return errors.New("kim data client is required")
+		}
+		opts.DataClient = client
 		return nil
 	}
 }
@@ -61,6 +90,15 @@ func (o Options) validate() error {
 	}
 	if o.GatewaySocket == "" {
 		return errors.New("kim gateway socket is required")
+	}
+	if o.DataClient != nil {
+		return nil
+	}
+	if o.RedisDSN == "" {
+		return errors.New("kim redis dsn is required")
+	}
+	if o.DBDSN == "" {
+		return errors.New("kim db dsn is required")
 	}
 	return nil
 }
