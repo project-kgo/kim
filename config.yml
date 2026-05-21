@@ -1,0 +1,23 @@
+http:
+  addr: ":8080"
+  route_prefix: "/kim"
+
+grpc:
+  gateway_service: "kim-gate"
+  gateway_timeout: "5s"
+
+etcd:
+  endpoints: "localhost:2379"
+  username: ""
+  password: ""
+
+redis:
+  dsn: "redis://localhost:6379/0"
+
+db:
+  dsn: "postgres://kim:secret@localhost:5432/kim?sslmode=disable"
+
+env: "dev"
+
+shutdown:
+  timeout: "10s"

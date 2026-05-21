@@ -3,11 +3,14 @@ package gateway
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"strings"
+	"time"
 
 	kimgatev1 "github.com/project-kgo/kim-gate/proto/kimgate/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/resolver"
 )
 
 type ServiceClient interface {
@@ -15,7 +18,8 @@ type ServiceClient interface {
 }
 
 type Config struct {
-	SocketPath string
+	GatewayService string
+	GatewayTimeout time.Duration
 }
 
 type Client struct {
@@ -23,28 +27,42 @@ type Client struct {
 	service ServiceClient
 }
 
-func NewClient(cfg Config) (*Client, error) {
-	socketPath := strings.TrimSpace(cfg.SocketPath)
-	if socketPath == "" {
-		return nil, errors.New("gateway socket path is required")
+func NewClient(cfg Config, logger *slog.Logger, resolverBuilder resolver.Builder) (*Client, error) {
+	serviceName := strings.TrimSpace(cfg.GatewayService)
+	if serviceName == "" {
+		return nil, errors.New("gateway service name is required")
+	}
+	if resolverBuilder == nil {
+		return nil, errors.New("resolver builder is required")
+	}
+	timeout := cfg.GatewayTimeout
+	if timeout <= 0 {
+		timeout = 5 * time.Second
 	}
 
 	conn, err := grpc.NewClient(
-		UnixTarget(socketPath),
+		"etcd:///"+serviceName,
+		grpc.WithResolvers(resolverBuilder),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithConnectParams(grpc.ConnectParams{
+			MinConnectTimeout: timeout,
+		}),
 	)
 	if err != nil {
 		return nil, err
+	}
+
+	if logger != nil {
+		logger.Info("gateway client created",
+			slog.String("service", serviceName),
+			slog.Duration("timeout", timeout),
+		)
 	}
 
 	return &Client{
 		conn:    conn,
 		service: kimgatev1.NewGatewayServiceClient(conn),
 	}, nil
-}
-
-func UnixTarget(socketPath string) string {
-	return "unix://" + strings.TrimSpace(socketPath)
 }
 
 func (c *Client) Service() ServiceClient {
@@ -63,7 +81,7 @@ func (c *Client) Close() error {
 
 func (c *Client) Ready(ctx context.Context) error {
 	if c == nil || c.conn == nil {
-		return errors.New("gateway connection is required")
+		return errors.New("gateway client is nil")
 	}
 	select {
 	case <-ctx.Done():
