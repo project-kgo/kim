@@ -14,7 +14,7 @@ const (
 )
 
 // Register 注册所有路由到 Hertz 引擎
-func Register(routerGroup route.IRouter, h *handler.Handler, logger *slog.Logger) {
+func Register(routerGroup route.IRouter, h *handler.Handler, logger *slog.Logger, routePrefix string) {
 	// 注册全局中间件
 	routerGroup.Use(
 		middleware.Recovery(),
@@ -24,7 +24,7 @@ func Register(routerGroup route.IRouter, h *handler.Handler, logger *slog.Logger
 	)
 
 	// v1 API 路由组
-	v1 := routerGroup.Group("/kim/v1")
+	v1 := routerGroup.Group(routePrefix + "/v1")
 	{
 		v1.POST("/messages", h.SendMessage)
 	}

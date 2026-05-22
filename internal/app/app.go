@@ -30,7 +30,7 @@ func New(cfg config.Config, logger *slog.Logger, data *data.Data, gatewayClient 
 	}
 	http := hertzserver.New(hertzserver.WithHostPorts(cfg.HTTPAddr))
 	h := handler.New(logger)
-	router.Register(http, h, logger)
+	router.Register(http, h, logger, cfg.RoutePrefix)
 	return &App{
 		cfg:     cfg,
 		logger:  logger,

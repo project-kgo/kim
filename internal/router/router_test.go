@@ -17,7 +17,7 @@ func newTestServer() *hertzserver.Hertz {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	h := handler.New(logger)
 	srv := hertzserver.New()
-	Register(srv, h, logger)
+	Register(srv, h, logger, "/kim")
 	return srv
 }
 

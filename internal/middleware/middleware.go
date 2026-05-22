@@ -77,9 +77,8 @@ func RateLimiter(rate int, burst int) app.HandlerFunc {
 			return
 		}
 		elapsed := now.Sub(v.lastSeen).Seconds()
-		v.tokens = min(float64(burst), v.tokens+elapsed*float64(rate)) - 1
-		v.lastSeen = now
-		if v.tokens < 0 {
+		tokens := min(float64(burst), v.tokens+elapsed*float64(rate))
+		if tokens < 1.0 {
 			mu.Unlock()
 			ctx.AbortWithStatusJSON(http.StatusTooManyRequests, map[string]any{
 				"code":    429,
@@ -87,6 +86,8 @@ func RateLimiter(rate int, burst int) app.HandlerFunc {
 			})
 			return
 		}
+		v.tokens = tokens - 1
+		v.lastSeen = now
 		mu.Unlock()
 		ctx.Next(c)
 	}
