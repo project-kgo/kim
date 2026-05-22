@@ -12,14 +12,14 @@ import (
 )
 
 func TestNewApp(t *testing.T) {
-	app := New(config.Defaults(), slog.Default(), &data.Data{}, &gateway.Client{})
+	app := New(config.Defaults(), slog.Default(), &data.Data{}, &gateway.Client{}, nil)
 	if app == nil {
 		t.Fatal("New returned nil")
 	}
 }
 
 func TestStartShutdown(t *testing.T) {
-	app := New(config.Defaults(), slog.Default(), &data.Data{}, &gateway.Client{})
+	app := New(config.Defaults(), slog.Default(), &data.Data{}, &gateway.Client{}, nil)
 	if err := app.Start(); err != nil {
 		t.Fatalf("Start returned error: %v", err)
 	}
@@ -34,7 +34,7 @@ func TestStartShutdown(t *testing.T) {
 }
 
 func TestShutdownIdempotent(t *testing.T) {
-	app := New(config.Defaults(), slog.Default(), &data.Data{}, &gateway.Client{})
+	app := New(config.Defaults(), slog.Default(), &data.Data{}, &gateway.Client{}, nil)
 	_ = app.Start()
 	time.Sleep(50 * time.Millisecond)
 	ctx := context.Background()

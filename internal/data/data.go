@@ -52,6 +52,10 @@ func New(redisDSN string, dbDSN string, logger *slog.Logger) (*Data, error) {
 		_ = client.Close()
 		return nil, fmt.Errorf("open postgres: %w", err)
 	}
+	if err = db.Ping(); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("ping postgres: %w", err)
+	}
 
 	if logger != nil {
 		logger.Info("data clients initialized",

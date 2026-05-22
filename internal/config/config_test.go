@@ -18,6 +18,12 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.RoutePrefix != DefaultRoutePrefix {
 		t.Fatalf("RoutePrefix = %q, want %q", cfg.RoutePrefix, DefaultRoutePrefix)
 	}
+	if cfg.GRPCAddr != DefaultGRPCAddr {
+		t.Fatalf("GRPCAddr = %q, want %q", cfg.GRPCAddr, DefaultGRPCAddr)
+	}
+	if cfg.ETCDServiceName != DefaultETCDServiceName {
+		t.Fatalf("ETCDServiceName = %q, want %q", cfg.ETCDServiceName, DefaultETCDServiceName)
+	}
 	if cfg.GatewayService != DefaultGatewayService {
 		t.Fatalf("GatewayService = %q, want %q", cfg.GatewayService, DefaultGatewayService)
 	}
@@ -36,6 +42,9 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.DBDSN != DefaultDBDSN {
 		t.Fatalf("DBDSN = %q, want %q", cfg.DBDSN, DefaultDBDSN)
 	}
+	if cfg.ETCDTTL != DefaultETCDTTL {
+		t.Fatalf("ETCDTTL = %s, want %s", cfg.ETCDTTL, DefaultETCDTTL)
+	}
 }
 
 func TestLoadYAMLConfig(t *testing.T) {
@@ -45,12 +54,15 @@ http:
   addr: ":9999"
   route_prefix: "/chat"
 grpc:
+  addr: ":9091"
+  service: "kim-staging"
   gateway_service: "my-kim-gate"
   gateway_timeout: "10s"
 etcd:
   endpoints: "host1:2379,host2:2379"
   username: "test"
   password: "secret"
+  ttl: "30s"
 redis:
   dsn: "redis://cache.example.com:6380/2"
 db:
@@ -72,6 +84,12 @@ shutdown:
 	if cfg.RoutePrefix != "/chat" {
 		t.Fatalf("RoutePrefix = %q", cfg.RoutePrefix)
 	}
+	if cfg.GRPCAddr != ":9091" {
+		t.Fatalf("GRPCAddr = %q", cfg.GRPCAddr)
+	}
+	if cfg.ETCDServiceName != "kim-staging" {
+		t.Fatalf("ETCDServiceName = %q", cfg.ETCDServiceName)
+	}
 	if cfg.GatewayService != "my-kim-gate" {
 		t.Fatalf("GatewayService = %q", cfg.GatewayService)
 	}
@@ -86,6 +104,9 @@ shutdown:
 	}
 	if cfg.ETCDPassword != "secret" {
 		t.Fatalf("ETCDPassword = %q", cfg.ETCDPassword)
+	}
+	if cfg.ETCDTTL != 30*time.Second {
+		t.Fatalf("ETCDTTL = %s", cfg.ETCDTTL)
 	}
 	if cfg.RedisDSN != "redis://cache.example.com:6380/2" {
 		t.Fatalf("RedisDSN = %q", cfg.RedisDSN)

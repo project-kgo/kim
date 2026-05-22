@@ -12,19 +12,21 @@ import (
 	"github.com/project-kgo/kim/internal/gateway"
 	"github.com/project-kgo/kim/internal/handler"
 	"github.com/project-kgo/kim/internal/router"
+	"github.com/project-kgo/kim/internal/rpc"
 )
 
 type App struct {
-	cfg     config.Config
-	logger  *slog.Logger
-	http    *hertzserver.Hertz
-	data    *data.Data
-	gateway *gateway.Client
-	done    chan error
-	once    sync.Once
+	cfg        config.Config
+	logger     *slog.Logger
+	http       *hertzserver.Hertz
+	rpcServer  *rpc.Server
+	data       *data.Data
+	gateway    *gateway.Client
+	done       chan error
+	once       sync.Once
 }
 
-func New(cfg config.Config, logger *slog.Logger, data *data.Data, gatewayClient *gateway.Client) *App {
+func New(cfg config.Config, logger *slog.Logger, data *data.Data, gatewayClient *gateway.Client, rpcServer *rpc.Server) *App {
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -32,12 +34,13 @@ func New(cfg config.Config, logger *slog.Logger, data *data.Data, gatewayClient 
 	h := handler.New(logger)
 	router.Register(http, h, logger, cfg.RoutePrefix)
 	return &App{
-		cfg:     cfg,
-		logger:  logger,
-		http:    http,
-		data:    data,
-		gateway: gatewayClient,
-		done:    make(chan error, 2),
+		cfg:       cfg,
+		logger:    logger,
+		http:      http,
+		rpcServer: rpcServer,
+		data:      data,
+		gateway:   gatewayClient,
+		done:      make(chan error, 3),
 	}
 }
 
@@ -51,6 +54,14 @@ func (a *App) Start() error {
 		)
 		a.done <- a.http.Run()
 	}()
+	if a.rpcServer != nil {
+		a.rpcServer.Start()
+		go func() {
+			if err := <-a.rpcServer.Done(); err != nil {
+				a.done <- err
+			}
+		}()
+	}
 	return nil
 }
 
@@ -68,9 +79,13 @@ func (a *App) Shutdown(ctx context.Context) error {
 	var err error
 	a.once.Do(func() {
 		httpErr := a.http.Shutdown(ctx)
+		var rpcErr error
+		if a.rpcServer != nil {
+			rpcErr = a.rpcServer.Shutdown(ctx)
+		}
 		gwErr := a.gateway.Close()
 		dataErr := a.data.Close()
-		err = errors.Join(httpErr, gwErr, dataErr)
+		err = errors.Join(httpErr, rpcErr, gwErr, dataErr)
 	})
 	return err
 }

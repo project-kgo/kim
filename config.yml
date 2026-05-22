@@ -3,21 +3,25 @@ http:
   route_prefix: "/kim"
 
 grpc:
+  addr: ":9090"
+  service: "kim"
   gateway_service: "kim-gate"
   gateway_timeout: "5s"
 
 etcd:
-  endpoints: "localhost:2379"
-  username: ""
-  password: ""
+  endpoints: "119.29.111.247:2379"
+  service: "kim-gate"
+  username: "root"
+  password: "YourSecurePassword123"
+  ttl: "15s"
 
 redis:
-  dsn: "redis://localhost:6379/0"
+  dsn: "redis://default:sE2g7BQhFRvvurQH0B0d@119.29.111.247:6379/0"
 
 db:
-  dsn: "postgres://kim:secret@localhost:5432/kim?sslmode=disable"
+  dsn: "host=1.12.207.92 port=6432 dbname=dim user=dim password=CDdyJmCQ0r0YdBYZ6EWB"
 
-env: "dev"
+env: "test"
 
 shutdown:
   timeout: "10s"

@@ -13,11 +13,14 @@ import (
 const (
 	DefaultHTTPAddr        = ":8080"
 	DefaultRoutePrefix     = "/kim"
+	DefaultGRPCAddr        = ":9090"
+	DefaultETCDServiceName = "kim"
 	DefaultGatewayService  = "kim-gate"
 	DefaultGatewayTimeout  = 5 * time.Second
 	DefaultETCDEndpoints   = "localhost:2379"
 	DefaultETCDUsername    = ""
 	DefaultETCDPassword    = ""
+	DefaultETCDTTL         = 15 * time.Second
 	DefaultRedisDSN        = "redis://localhost:6379/0"
 	DefaultDBDSN           = "postgres://kim:secret@localhost:5432/kim?sslmode=disable"
 	DefaultEnv             = ""
@@ -27,12 +30,15 @@ const (
 type Config struct {
 	HTTPAddr         string
 	RoutePrefix      string
+	GRPCAddr         string
+	ETCDServiceName  string
 	GatewayService   string
 	GatewayTimeout   time.Duration
 	ETCDEndpointsStr string
 	ETCDEndpoints    []string
 	ETCDUsername     string
 	ETCDPassword     string
+	ETCDTTL          time.Duration
 	RedisDSN         string
 	DBDSN            string
 	Env              string
@@ -48,11 +54,14 @@ func Load(args []string) (Config, error) {
 	fs.String("config", "", "config file path")
 	fs.String("http-addr", "", "http listen address")
 	fs.String("route-prefix", "", "http route prefix")
+	fs.String("grpc-addr", "", "grpc listen address")
+	fs.String("grpc-service", "", "grpc service name for etcd registration")
 	fs.String("gateway-service", "", "etcd service name for kim-gate")
 	fs.Duration("gateway-timeout", 0, "gateway connection timeout")
 	fs.String("etcd-endpoints", "", "comma-separated etcd endpoints")
 	fs.String("etcd-username", "", "etcd username")
 	fs.String("etcd-password", "", "etcd password")
+	fs.Duration("etcd-ttl", 0, "etcd lease ttl")
 	fs.String("redis-dsn", "", "redis connection dsn")
 	fs.String("db-dsn", "", "postgres connection dsn")
 	fs.String("env", "", "deployment environment")
@@ -70,11 +79,14 @@ func Load(args []string) (Config, error) {
 	cfg := Config{
 		HTTPAddr:         v.GetString("http.addr"),
 		RoutePrefix:      v.GetString("http.route_prefix"),
+		GRPCAddr:         v.GetString("grpc.addr"),
+		ETCDServiceName:  v.GetString("grpc.service"),
 		GatewayService:   v.GetString("grpc.gateway_service"),
 		GatewayTimeout:   v.GetDuration("grpc.gateway_timeout"),
 		ETCDEndpointsStr: v.GetString("etcd.endpoints"),
 		ETCDUsername:     v.GetString("etcd.username"),
 		ETCDPassword:     v.GetString("etcd.password"),
+		ETCDTTL:          v.GetDuration("etcd.ttl"),
 		RedisDSN:         v.GetString("redis.dsn"),
 		DBDSN:            v.GetString("db.dsn"),
 		Env:              v.GetString("env"),
@@ -92,11 +104,14 @@ func Defaults() Config {
 	return Config{
 		HTTPAddr:         DefaultHTTPAddr,
 		RoutePrefix:      DefaultRoutePrefix,
+		GRPCAddr:         DefaultGRPCAddr,
+		ETCDServiceName:  DefaultETCDServiceName,
 		GatewayService:   DefaultGatewayService,
 		GatewayTimeout:   DefaultGatewayTimeout,
 		ETCDEndpointsStr: DefaultETCDEndpoints,
 		ETCDUsername:     DefaultETCDUsername,
 		ETCDPassword:     DefaultETCDPassword,
+		ETCDTTL:          DefaultETCDTTL,
 		RedisDSN:         DefaultRedisDSN,
 		DBDSN:            DefaultDBDSN,
 		Env:              DefaultEnv,
@@ -108,11 +123,14 @@ func setDefaults(v *viper.Viper) {
 	defaults := Defaults()
 	v.SetDefault("http.addr", defaults.HTTPAddr)
 	v.SetDefault("http.route_prefix", defaults.RoutePrefix)
+	v.SetDefault("grpc.addr", defaults.GRPCAddr)
+	v.SetDefault("grpc.service", defaults.ETCDServiceName)
 	v.SetDefault("grpc.gateway_service", defaults.GatewayService)
 	v.SetDefault("grpc.gateway_timeout", defaults.GatewayTimeout.String())
 	v.SetDefault("etcd.endpoints", defaults.ETCDEndpointsStr)
 	v.SetDefault("etcd.username", defaults.ETCDUsername)
 	v.SetDefault("etcd.password", defaults.ETCDPassword)
+	v.SetDefault("etcd.ttl", defaults.ETCDTTL.String())
 	v.SetDefault("redis.dsn", defaults.RedisDSN)
 	v.SetDefault("db.dsn", defaults.DBDSN)
 	v.SetDefault("env", defaults.Env)
@@ -125,11 +143,14 @@ func bindEnv(v *viper.Viper) {
 	v.AutomaticEnv()
 	must(v.BindEnv("http.addr", "KIM_HTTP_ADDR"))
 	must(v.BindEnv("http.route_prefix", "KIM_ROUTE_PREFIX"))
+	must(v.BindEnv("grpc.addr", "KIM_GRPC_ADDR"))
+	must(v.BindEnv("grpc.service", "KIM_GRPC_SERVICE"))
 	must(v.BindEnv("grpc.gateway_service", "KIM_GATEWAY_SERVICE"))
 	must(v.BindEnv("grpc.gateway_timeout", "KIM_GATEWAY_TIMEOUT"))
 	must(v.BindEnv("etcd.endpoints", "KIM_ETCD_ENDPOINTS"))
 	must(v.BindEnv("etcd.username", "KIM_ETCD_USERNAME"))
 	must(v.BindEnv("etcd.password", "KIM_ETCD_PASSWORD"))
+	must(v.BindEnv("etcd.ttl", "KIM_ETCD_TTL"))
 	must(v.BindEnv("redis.dsn", "KIM_REDIS_DSN"))
 	must(v.BindEnv("db.dsn", "KIM_DB_DSN"))
 	must(v.BindEnv("env", "KIM_ENV"))
@@ -140,11 +161,14 @@ func bindFlags(v *viper.Viper, fs *pflag.FlagSet) error {
 	bindings := map[string]string{
 		"http.addr":             "http-addr",
 		"http.route_prefix":     "route-prefix",
+		"grpc.addr":             "grpc-addr",
+		"grpc.service":          "grpc-service",
 		"grpc.gateway_service":  "gateway-service",
 		"grpc.gateway_timeout":  "gateway-timeout",
 		"etcd.endpoints":        "etcd-endpoints",
 		"etcd.username":         "etcd-username",
 		"etcd.password":         "etcd-password",
+		"etcd.ttl":              "etcd-ttl",
 		"redis.dsn":             "redis-dsn",
 		"db.dsn":                "db-dsn",
 		"env":                   "env",
@@ -179,6 +203,8 @@ func readConfigFile(v *viper.Viper, configPath string) error {
 func (c *Config) normalize() {
 	c.HTTPAddr = strings.TrimSpace(c.HTTPAddr)
 	c.RoutePrefix = normalizePath(c.RoutePrefix)
+	c.GRPCAddr = strings.TrimSpace(c.GRPCAddr)
+	c.ETCDServiceName = strings.TrimSpace(c.ETCDServiceName)
 	c.GatewayService = strings.TrimSpace(c.GatewayService)
 	c.ETCDEndpointsStr = strings.TrimSpace(c.ETCDEndpointsStr)
 	if c.ETCDEndpointsStr != "" {
@@ -198,12 +224,35 @@ func (c *Config) normalize() {
 	c.DBDSN = strings.TrimSpace(c.DBDSN)
 }
 
+// EtcdServiceName returns the service name with env suffix for etcd registration/discovery.
+// For example, with service "kim" and env "dev", this returns "kim-dev".
+func (c Config) EtcdServiceName() string {
+	if c.Env == "" {
+		return c.ETCDServiceName
+	}
+	return c.ETCDServiceName + "-" + c.Env
+}
+
+// GatewayServiceName returns the gateway service name with env suffix for etcd discovery.
+func (c Config) GatewayServiceName() string {
+	if c.Env == "" {
+		return c.GatewayService
+	}
+	return c.GatewayService + "-" + c.Env
+}
+
 func (c Config) Validate() error {
 	if c.HTTPAddr == "" {
 		return errors.New("http addr is required")
 	}
 	if c.RoutePrefix == "" {
 		return errors.New("route prefix is required")
+	}
+	if c.GRPCAddr == "" {
+		return errors.New("grpc addr is required")
+	}
+	if c.ETCDServiceName == "" {
+		return errors.New("etcd service name is required")
 	}
 	if c.GatewayService == "" {
 		return errors.New("gateway service name is required")

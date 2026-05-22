@@ -10,8 +10,10 @@ import (
 	"github.com/project-kgo/kim/internal/app"
 	"github.com/project-kgo/kim/internal/config"
 	"github.com/project-kgo/kim/internal/data"
+	"github.com/project-kgo/kim/internal/discovery"
 	"github.com/project-kgo/kim/internal/discovery/etcd"
 	"github.com/project-kgo/kim/internal/gateway"
+	"github.com/project-kgo/kim/internal/rpc"
 	"go.etcd.io/etcd/client/v3"
 	"log/slog"
 )
@@ -33,7 +35,12 @@ func Initialize(cfg config.Config, logger *slog.Logger) (*app.App, error) {
 	if err != nil {
 		return nil, err
 	}
-	appApp := app.New(cfg, logger, data, gatewayClient)
+	serviceRegistry := ProvideEtcdRegistry(client, cfg)
+	server, err := ProvideRPCServer(cfg, logger, serviceRegistry)
+	if err != nil {
+		return nil, err
+	}
+	appApp := app.New(cfg, logger, data, gatewayClient, server)
 	return appApp, nil
 }
 
@@ -51,9 +58,17 @@ func ProvideEtcdClient(cfg config.Config) (*clientv3.Client, error) {
 	})
 }
 
+func ProvideEtcdRegistry(cli *clientv3.Client, cfg config.Config) discovery.ServiceRegistry {
+	return etcd.New(cli, cfg.ETCDTTL)
+}
+
 func ProvideGatewayConfig(cfg config.Config) gateway.Config {
 	return gateway.Config{
-		GatewayService: cfg.GatewayService,
+		GatewayService: cfg.GatewayServiceName(),
 		GatewayTimeout: cfg.GatewayTimeout,
 	}
+}
+
+func ProvideRPCServer(cfg config.Config, logger *slog.Logger, registry discovery.ServiceRegistry) (*rpc.Server, error) {
+	return rpc.NewServer(cfg, nil, logger, registry, cfg.GRPCAddr)
 }
