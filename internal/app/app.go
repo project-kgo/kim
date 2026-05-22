@@ -10,6 +10,8 @@ import (
 	"github.com/project-kgo/kim/internal/config"
 	"github.com/project-kgo/kim/internal/data"
 	"github.com/project-kgo/kim/internal/gateway"
+	"github.com/project-kgo/kim/internal/handler"
+	"github.com/project-kgo/kim/internal/router"
 )
 
 type App struct {
@@ -27,6 +29,8 @@ func New(cfg config.Config, logger *slog.Logger, data *data.Data, gatewayClient 
 		logger = slog.Default()
 	}
 	http := hertzserver.New(hertzserver.WithHostPorts(cfg.HTTPAddr))
+	h := handler.New(logger)
+	router.Register(http, h, logger)
 	return &App{
 		cfg:     cfg,
 		logger:  logger,
