@@ -1,0 +1,16 @@
+package handler
+
+import "log/slog"
+
+// Handler 持有所有 handler 共享的依赖
+type Handler struct {
+	logger *slog.Logger
+}
+
+// New 创建 Handler 实例
+func New(logger *slog.Logger) *Handler {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	return &Handler{logger: logger}
+}
