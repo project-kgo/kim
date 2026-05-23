@@ -1,5 +1,7 @@
 package event
 
+const TopicC2CMessage = "chat:c2c"
+
 type MessageEvent struct {
 	MessageID      int64  `json:"message_id"`
 	ConversationID string `json:"conversation_id"`

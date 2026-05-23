@@ -2,19 +2,17 @@ package service
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"strconv"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/kanengo/ku/mqx"
 	"github.com/kanengo/ku/snowflakex"
 	"github.com/project-kgo/kim/internal/event"
 	"github.com/project-kgo/kim/internal/model"
 )
-
-const topicC2CMessage = "chat:c2c"
 
 // MessageService 消息业务逻辑
 type MessageService struct {
@@ -48,7 +46,7 @@ func (s *MessageService) Send(ctx context.Context, req model.SendMessageRequest)
 		CreatedAt:      now.UnixMilli(),
 	}
 
-	data, err := json.Marshal(payload)
+	data, err := sonic.Marshal(payload)
 	if err != nil {
 		s.logger.ErrorContext(ctx, "failed to marshal message payload",
 			slog.String("error", err.Error()),
@@ -58,7 +56,7 @@ func (s *MessageService) Send(ctx context.Context, req model.SendMessageRequest)
 
 	if err := s.pubsub.Publish(ctx, &mqx.PublishRequest{
 		ID:          msgIDStr,
-		Topic:       topicC2CMessage,
+		Topic:       event.TopicC2CMessage,
 		Data:        data,
 		ContentType: "application/json",
 	}); err != nil {

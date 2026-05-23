@@ -25,6 +25,7 @@ description: 项目规范 (Project Rules)
 - **redis** go-redis
 - **postgres** sqlx
 - **grpc** 调用github.com/project-kgo/kim-gate提供长连接相关能力
+- **json** 使用sonic库进行json编码解码
 
 ## 2. 编码规范
 - **日志**: 使用 `log/slog` 进行结构化日志记录，通过依赖注入传入 Logger。
