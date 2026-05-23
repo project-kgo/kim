@@ -13,6 +13,7 @@ import (
 	"github.com/project-kgo/kim/internal/handler"
 	"github.com/project-kgo/kim/internal/router"
 	"github.com/project-kgo/kim/internal/rpc"
+	"github.com/project-kgo/kim/internal/service"
 )
 
 type App struct {
@@ -26,12 +27,13 @@ type App struct {
 	once      sync.Once
 }
 
-func New(cfg config.Config, logger *slog.Logger, data *data.Data, gatewayClient *gateway.Client, rpcServer *rpc.Server) *App {
+func New(cfg config.Config, logger *slog.Logger, data *data.Data, gatewayClient *gateway.Client, rpcServer *rpc.Server, messageService *service.MessageService) *App {
 	if logger == nil {
 		logger = slog.Default()
 	}
 	http := hertzserver.New(hertzserver.WithHostPorts(cfg.HTTPAddr))
-	h := handler.New(logger)
+
+	h := handler.New(logger, messageService)
 	router.Register(http, h, logger, cfg.RoutePrefix)
 	return &App{
 		cfg:       cfg,

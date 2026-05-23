@@ -2,13 +2,12 @@ package handler
 
 import (
 	"context"
-	"log/slog"
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/project-kgo/kim/internal/model"
 )
 
-// SendMessage 发送私聊消息（占位）
+// SendMessage 发送私聊消息
 func (h *Handler) SendMessage(ctx context.Context, c *app.RequestContext) {
 	var req model.SendMessageRequest
 	if err := c.BindJSON(&req); err != nil {
@@ -19,16 +18,20 @@ func (h *Handler) SendMessage(ctx context.Context, c *app.RequestContext) {
 		model.Error(c, model.CodeBadRequest, "conversation_id is required")
 		return
 	}
+	if req.SenderID == "" {
+		model.Error(c, model.CodeBadRequest, "sender_id is required")
+		return
+	}
 	if req.ReceiverID == "" {
 		model.Error(c, model.CodeBadRequest, "receiver_id is required")
 		return
 	}
 
-	h.logger.InfoContext(ctx, "send message handler invoked",
-		slog.String("conversation_id", req.ConversationID),
-		slog.String("receiver_id", req.ReceiverID),
-		slog.String("type", req.Type),
-	)
+	resp, err := h.messageService.Send(ctx, req)
+	if err != nil {
+		model.Error(c, model.CodeInternalError, "failed to send message")
+		return
+	}
 
-	model.Success(c, model.SendMessageResponse{})
+	model.Success(c, resp)
 }

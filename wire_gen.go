@@ -7,6 +7,7 @@
 package main
 
 import (
+	"github.com/kanengo/ku/snowflakex"
 	"github.com/project-kgo/kim/internal/app"
 	"github.com/project-kgo/kim/internal/config"
 	"github.com/project-kgo/kim/internal/data"
@@ -14,6 +15,7 @@ import (
 	"github.com/project-kgo/kim/internal/discovery/etcd"
 	"github.com/project-kgo/kim/internal/gateway"
 	"github.com/project-kgo/kim/internal/rpc"
+	"github.com/project-kgo/kim/internal/service"
 	"go.etcd.io/etcd/client/v3"
 	"log/slog"
 )
@@ -40,7 +42,12 @@ func Initialize(cfg config.Config, logger *slog.Logger) (*app.App, error) {
 	if err != nil {
 		return nil, err
 	}
-	appApp := app.New(cfg, logger, data, gatewayClient, server)
+	node, err := ProvideSnowflakeNode()
+	if err != nil {
+		return nil, err
+	}
+	messageService := ProvideMessageService(logger, node, data)
+	appApp := app.New(cfg, logger, data, gatewayClient, server, messageService)
 	return appApp, nil
 }
 
@@ -48,6 +55,14 @@ func Initialize(cfg config.Config, logger *slog.Logger) (*app.App, error) {
 
 func ProvideData(cfg config.Config, logger *slog.Logger) (*data.Data, error) {
 	return data.New(cfg.RedisDSN, cfg.MQRedisDSN, cfg.DBDSN, logger)
+}
+
+func ProvideSnowflakeNode() (*snowflakex.Node, error) {
+	return snowflakex.NewNode(1, 0)
+}
+
+func ProvideMessageService(logger *slog.Logger, node *snowflakex.Node, d *data.Data) *service.MessageService {
+	return service.NewMessageService(logger, node, d.PubSub)
 }
 
 func ProvideEtcdClient(cfg config.Config) (*clientv3.Client, error) {

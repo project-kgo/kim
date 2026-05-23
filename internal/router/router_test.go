@@ -1,6 +1,7 @@
 package router
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"os"
@@ -9,13 +10,33 @@ import (
 
 	"github.com/cloudwego/hertz/pkg/common/ut"
 	hertzserver "github.com/cloudwego/hertz/pkg/app/server"
+	"github.com/kanengo/ku/mqx"
+	"github.com/kanengo/ku/snowflakex"
 	"github.com/project-kgo/kim/internal/handler"
 	"github.com/project-kgo/kim/internal/model"
+	"github.com/project-kgo/kim/internal/service"
 )
+
+type mockPubSub struct {
+	published []*mqx.PublishRequest
+}
+
+func (m *mockPubSub) Publish(_ context.Context, req *mqx.PublishRequest) error {
+	m.published = append(m.published, req)
+	return nil
+}
+
+func (m *mockPubSub) Subscribe(_ context.Context, _ *mqx.SubscribeRequest) (mqx.Subscription, error) {
+	return nil, nil
+}
+
+func (m *mockPubSub) Close() error { return nil }
 
 func newTestServer() *hertzserver.Hertz {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	h := handler.New(logger)
+	node, _ := snowflakex.NewNode(1, 0)
+	messageService := service.NewMessageService(logger, node, &mockPubSub{})
+	h := handler.New(logger, messageService)
 	srv := hertzserver.New()
 	Register(srv, h, logger, "/kim")
 	return srv
@@ -23,8 +44,8 @@ func newTestServer() *hertzserver.Hertz {
 
 func TestSendMessageSuccess(t *testing.T) {
 	srv := newTestServer()
-	body := `{"conversation_id":"conv_123","receiver_id":"user_456","content":"hello","type":"text"}`
-	rec := ut.PerformRequest(srv.Engine, "POST", "/kim/v1/messages",
+	body := `{"conversation_id":"conv_123","sender_id":"user_123","receiver_id":"user_456","content":"hello","type":"text"}`
+	rec := ut.PerformRequest(srv.Engine, "POST", "/kim/v1/c2c/messages",
 		&ut.Body{Body: strings.NewReader(body), Len: len(body)},
 		ut.Header{Key: "Content-Type", Value: "application/json"},
 	)
@@ -44,7 +65,7 @@ func TestSendMessageSuccess(t *testing.T) {
 func TestSendMessageValidation(t *testing.T) {
 	srv := newTestServer()
 	body := `{}`
-	rec := ut.PerformRequest(srv.Engine, "POST", "/kim/v1/messages",
+	rec := ut.PerformRequest(srv.Engine, "POST", "/kim/v1/c2c/messages",
 		&ut.Body{Body: strings.NewReader(body), Len: len(body)},
 		ut.Header{Key: "Content-Type", Value: "application/json"},
 	)
@@ -63,7 +84,7 @@ func TestSendMessageValidation(t *testing.T) {
 
 func TestCORSPreflight(t *testing.T) {
 	srv := newTestServer()
-	rec := ut.PerformRequest(srv.Engine, "OPTIONS", "/kim/v1/messages", nil)
+	rec := ut.PerformRequest(srv.Engine, "OPTIONS", "/kim/v1/c2c/messages", nil)
 	if rec.Code != 204 {
 		t.Fatalf("expected 204, got %d", rec.Code)
 	}
