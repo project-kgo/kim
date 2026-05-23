@@ -9,8 +9,8 @@ import (
 )
 
 const (
-	defaultRateLimit = 100  // 每秒令牌数
-	defaultBurst     = 200  // 桶容量
+	defaultRateLimit = 100 // 每秒令牌数
+	defaultBurst     = 200 // 桶容量
 )
 
 // Register 注册所有路由到 Hertz 引擎
@@ -26,6 +26,7 @@ func Register(routerGroup route.IRouter, h *handler.Handler, logger *slog.Logger
 	// v1 API 路由组
 	v1 := routerGroup.Group(routePrefix + "/v1")
 	{
-		v1.POST("/messages", h.SendMessage)
+		// c2c
+		v1.POST("/c2c/messages", h.SendMessage)
 	}
 }

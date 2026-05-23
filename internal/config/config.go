@@ -22,6 +22,7 @@ const (
 	DefaultETCDPassword    = ""
 	DefaultETCDTTL         = 15 * time.Second
 	DefaultRedisDSN        = "redis://localhost:6379/0"
+	DefaultMQRedisDSN      = ""
 	DefaultDBDSN           = "postgres://kim:secret@localhost:5432/kim?sslmode=disable"
 	DefaultEnv             = ""
 	DefaultShutdownTimeout = 10 * time.Second
@@ -40,6 +41,7 @@ type Config struct {
 	ETCDPassword     string
 	ETCDTTL          time.Duration
 	RedisDSN         string
+	MQRedisDSN       string
 	DBDSN            string
 	Env              string
 	ShutdownTimeout  time.Duration
@@ -63,6 +65,7 @@ func Load(args []string) (Config, error) {
 	fs.String("etcd-password", "", "etcd password")
 	fs.Duration("etcd-ttl", 0, "etcd lease ttl")
 	fs.String("redis-dsn", "", "redis connection dsn")
+	fs.String("mq-redis-dsn", "", "redis connection dsn for message queue (empty falls back to redis-dsn)")
 	fs.String("db-dsn", "", "postgres connection dsn")
 	fs.String("env", "", "deployment environment")
 	fs.Duration("shutdown-timeout", 0, "graceful shutdown timeout")
@@ -88,6 +91,7 @@ func Load(args []string) (Config, error) {
 		ETCDPassword:     v.GetString("etcd.password"),
 		ETCDTTL:          v.GetDuration("etcd.ttl"),
 		RedisDSN:         v.GetString("redis.dsn"),
+		MQRedisDSN:       v.GetString("mq.redis.dsn"),
 		DBDSN:            v.GetString("db.dsn"),
 		Env:              v.GetString("env"),
 		ShutdownTimeout:  v.GetDuration("shutdown.timeout"),
@@ -113,6 +117,7 @@ func Defaults() Config {
 		ETCDPassword:     DefaultETCDPassword,
 		ETCDTTL:          DefaultETCDTTL,
 		RedisDSN:         DefaultRedisDSN,
+		MQRedisDSN:       DefaultMQRedisDSN,
 		DBDSN:            DefaultDBDSN,
 		Env:              DefaultEnv,
 		ShutdownTimeout:  DefaultShutdownTimeout,
@@ -132,6 +137,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("etcd.password", defaults.ETCDPassword)
 	v.SetDefault("etcd.ttl", defaults.ETCDTTL.String())
 	v.SetDefault("redis.dsn", defaults.RedisDSN)
+	v.SetDefault("mq.redis.dsn", defaults.MQRedisDSN)
 	v.SetDefault("db.dsn", defaults.DBDSN)
 	v.SetDefault("env", defaults.Env)
 	v.SetDefault("shutdown.timeout", defaults.ShutdownTimeout.String())
@@ -152,6 +158,7 @@ func bindEnv(v *viper.Viper) {
 	must(v.BindEnv("etcd.password", "KIM_ETCD_PASSWORD"))
 	must(v.BindEnv("etcd.ttl", "KIM_ETCD_TTL"))
 	must(v.BindEnv("redis.dsn", "KIM_REDIS_DSN"))
+	must(v.BindEnv("mq.redis.dsn", "KIM_MQ_REDIS_DSN"))
 	must(v.BindEnv("db.dsn", "KIM_DB_DSN"))
 	must(v.BindEnv("env", "KIM_ENV"))
 	must(v.BindEnv("shutdown.timeout", "KIM_SHUTDOWN_TIMEOUT"))
@@ -170,6 +177,7 @@ func bindFlags(v *viper.Viper, fs *pflag.FlagSet) error {
 		"etcd.password":         "etcd-password",
 		"etcd.ttl":              "etcd-ttl",
 		"redis.dsn":             "redis-dsn",
+		"mq.redis.dsn":          "mq-redis-dsn",
 		"db.dsn":                "db-dsn",
 		"env":                   "env",
 		"shutdown.timeout":      "shutdown-timeout",
@@ -221,6 +229,7 @@ func (c *Config) normalize() {
 	c.ETCDPassword = strings.TrimSpace(c.ETCDPassword)
 	c.Env = strings.TrimSpace(c.Env)
 	c.RedisDSN = strings.TrimSpace(c.RedisDSN)
+	c.MQRedisDSN = strings.TrimSpace(c.MQRedisDSN)
 	c.DBDSN = strings.TrimSpace(c.DBDSN)
 }
 

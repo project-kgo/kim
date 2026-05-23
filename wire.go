@@ -33,7 +33,7 @@ func Initialize(cfg config.Config, logger *slog.Logger) (*app.App, error) {
 }
 
 func ProvideData(cfg config.Config, logger *slog.Logger) (*data.Data, error) {
-	return data.New(cfg.RedisDSN, cfg.DBDSN, logger)
+	return data.New(cfg.RedisDSN, cfg.MQRedisDSN, cfg.DBDSN, logger)
 }
 
 func ProvideEtcdClient(cfg config.Config) (*clientv3.Client, error) {

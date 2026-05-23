@@ -18,6 +18,10 @@ etcd:
 redis:
   dsn: "redis://default:sE2g7BQhFRvvurQH0B0d@119.29.111.247:6379/0"
 
+mq:
+  redis:
+    dsn: "redis://default:sE2g7BQhFRvvurQH0B0d@119.29.111.247:6379/1"
+
 db:
   dsn: "host=1.12.207.92 port=6432 dbname=dim user=dim password=CDdyJmCQ0r0YdBYZ6EWB"
 
