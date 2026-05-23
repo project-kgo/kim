@@ -1,9 +1,9 @@
 http:
-  addr: ":8080"
+  addr: ":8881"
   route_prefix: "/kim"
 
 grpc:
-  addr: ":9090"
+  addr: ":9091"
   service: "kim"
   gateway_service: "kim-gate"
   gateway_timeout: "5s"

@@ -70,5 +70,5 @@ func ProvideGatewayConfig(cfg config.Config) gateway.Config {
 }
 
 func ProvideRPCServer(cfg config.Config, logger *slog.Logger, registry discovery.ServiceRegistry) (*rpc.Server, error) {
-	return rpc.NewServer(cfg, nil, logger, registry, cfg.GRPCAddr)
+	return rpc.NewServer(cfg, nil, logger, registry)
 }

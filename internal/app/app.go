@@ -16,14 +16,14 @@ import (
 )
 
 type App struct {
-	cfg        config.Config
-	logger     *slog.Logger
-	http       *hertzserver.Hertz
-	rpcServer  *rpc.Server
-	data       *data.Data
-	gateway    *gateway.Client
-	done       chan error
-	once       sync.Once
+	cfg       config.Config
+	logger    *slog.Logger
+	http      *hertzserver.Hertz
+	rpcServer *rpc.Server
+	data      *data.Data
+	gateway   *gateway.Client
+	done      chan error
+	once      sync.Once
 }
 
 func New(cfg config.Config, logger *slog.Logger, data *data.Data, gatewayClient *gateway.Client, rpcServer *rpc.Server) *App {
@@ -62,6 +62,7 @@ func (a *App) Start() error {
 			}
 		}()
 	}
+
 	return nil
 }
 

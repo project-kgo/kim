@@ -1,12 +1,29 @@
 package discovery
 
-import "context"
+import (
+	"context"
+
+	gonanoid "github.com/matoous/go-nanoid/v2"
+)
 
 // ServiceInstance identifies a server instance for registration.
 type ServiceInstance struct {
 	ID      string
 	Name    string
 	Address string
+}
+
+// NewServiceInstance creates a ServiceInstance with a randomly generated ID.
+func NewServiceInstance(name, address string) (ServiceInstance, error) {
+	id, err := gonanoid.New()
+	if err != nil {
+		return ServiceInstance{}, err
+	}
+	return ServiceInstance{
+		ID:      id,
+		Name:    name,
+		Address: address,
+	}, nil
 }
 
 // ServiceRegistry abstracts service registration for gRPC.

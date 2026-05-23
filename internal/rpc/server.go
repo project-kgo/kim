@@ -8,6 +8,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/kanengo/ku/ipx"
 	"github.com/project-kgo/kim/internal/config"
 	"github.com/project-kgo/kim/internal/discovery"
 	"google.golang.org/grpc"
@@ -36,7 +37,6 @@ func NewServer(
 	register ServiceRegistrar,
 	logger *slog.Logger,
 	registry discovery.ServiceRegistry,
-	instanceID string,
 ) (*Server, error) {
 	listener, err := net.Listen("tcp", cfg.GRPCAddr)
 	if err != nil {
@@ -56,16 +56,17 @@ func NewServer(
 	serviceName := cfg.EtcdServiceName()
 	healthServer.SetServingStatus(serviceName, healthpb.HealthCheckResponse_SERVING)
 
+	instance, err := discovery.NewServiceInstance(serviceName, etcdInternalAddr(cfg))
+	if err != nil {
+		return nil, fmt.Errorf("create service instance: %w", err)
+	}
+
 	return &Server{
 		server:   grpcServer,
 		listener: listener,
 		addr:     listener.Addr().String(),
 		registry: registry,
-		instance: discovery.ServiceInstance{
-			ID:      instanceID,
-			Name:    serviceName,
-			Address: cfg.GRPCAddr,
-		},
+		instance: instance,
 		logger: logger,
 		done:   make(chan error, 1),
 	}, nil
@@ -140,4 +141,17 @@ func (s *Server) Shutdown(ctx context.Context) error {
 		s.logger.Info("grpc server shut down", slog.String("addr", s.addr))
 	}
 	return nil
+}
+
+func etcdInternalAddr(cfg config.Config) string {
+	_, port, err := net.SplitHostPort(cfg.GRPCAddr)
+	if err != nil {
+		panic(err)
+	}
+	internalIp, err := ipx.GetInternalIp()
+	if err != nil {
+		panic(err)
+	}
+
+	return net.JoinHostPort(internalIp, port)
 }
