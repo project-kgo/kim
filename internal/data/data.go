@@ -10,6 +10,7 @@ import (
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/jmoiron/sqlx"
+	"github.com/jmoiron/sqlx/reflectx"
 	"github.com/kanengo/ku/mqx"
 	"github.com/redis/go-redis/v9"
 )
@@ -76,6 +77,7 @@ func New(redisDSN string, mqRedisDSN string, dbDSN string, logger *slog.Logger) 
 		_ = client.Close()
 		return nil, fmt.Errorf("open postgres: %w", err)
 	}
+	db.Mapper = reflectx.NewMapperFunc("json", strings.ToLower)
 	if err = db.Ping(); err != nil {
 		_ = db.Close()
 		_ = mqClient.Close()

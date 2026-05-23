@@ -10,6 +10,7 @@ import (
 
 	"github.com/kanengo/ku/mqx"
 	"github.com/kanengo/ku/snowflakex"
+	"github.com/project-kgo/kim/internal/event"
 	"github.com/project-kgo/kim/internal/model"
 )
 
@@ -37,8 +38,8 @@ func (s *MessageService) Send(ctx context.Context, req model.SendMessageRequest)
 	now := time.Now()
 	msgIDStr := strconv.FormatInt(msgID, 10)
 
-	payload := model.MessagePayload{
-		MessageID:      msgIDStr,
+	payload := event.MessageEvent{
+		MessageID:      msgID,
 		ConversationID: req.ConversationID,
 		SenderID:       req.SenderID,
 		ReceiverID:     req.ReceiverID,
