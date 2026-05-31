@@ -11,4 +11,8 @@ CREATE TABLE IF NOT EXISTS dim.conversations
     created_at timestamp with time zone NOT NULL DEFAULT now(),
     updated_at timestamp with time zone NOT NULL DEFAULT now(),
     target_id bigint NOT NULL DEFAULT 0
+)  WITH (
+ 	tsdb.hypertable,
+   	tsdb.partition_column='created_at',
+   	tsdb.chunk_interval = '1 month'
 );
