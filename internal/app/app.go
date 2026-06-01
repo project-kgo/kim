@@ -23,11 +23,12 @@ type App struct {
 	rpcServer *rpc.Server
 	data      *data.Data
 	gateway   *gateway.Client
+	consumer  *service.Consumer
 	done      chan error
 	once      sync.Once
 }
 
-func New(cfg config.Config, logger *slog.Logger, data *data.Data, gatewayClient *gateway.Client, rpcServer *rpc.Server, messageService *service.MessageService) *App {
+func New(cfg config.Config, logger *slog.Logger, data *data.Data, gatewayClient *gateway.Client, rpcServer *rpc.Server, messageService *service.MessageService, consumer *service.Consumer) *App {
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -42,6 +43,7 @@ func New(cfg config.Config, logger *slog.Logger, data *data.Data, gatewayClient 
 		rpcServer: rpcServer,
 		data:      data,
 		gateway:   gatewayClient,
+		consumer:  consumer,
 		done:      make(chan error, 3),
 	}
 }
@@ -63,6 +65,11 @@ func (a *App) Start() error {
 				a.done <- err
 			}
 		}()
+	}
+	if a.consumer != nil {
+		if err := a.consumer.Register(context.Background()); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -86,9 +93,13 @@ func (a *App) Shutdown(ctx context.Context) error {
 		if a.rpcServer != nil {
 			rpcErr = a.rpcServer.Shutdown(ctx)
 		}
+		var consumerErr error
+		if a.consumer != nil {
+			consumerErr = a.consumer.Close()
+		}
 		gwErr := a.gateway.Close()
 		dataErr := a.data.Close()
-		err = errors.Join(httpErr, rpcErr, gwErr, dataErr)
+		err = errors.Join(httpErr, rpcErr, consumerErr, gwErr, dataErr)
 	})
 	return err
 }

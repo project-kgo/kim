@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cloudwego/hertz/pkg/common/ut"
 	hertzserver "github.com/cloudwego/hertz/pkg/app/server"
+	"github.com/cloudwego/hertz/pkg/common/ut"
 	"github.com/kanengo/ku/mqx"
 	"github.com/kanengo/ku/snowflakex"
 	"github.com/project-kgo/kim/internal/handler"
@@ -44,7 +44,7 @@ func newTestServer() *hertzserver.Hertz {
 
 func TestSendMessageSuccess(t *testing.T) {
 	srv := newTestServer()
-	body := `{"conversation_id":"conv_123","sender_id":"user_123","receiver_id":"user_456","content":"hello","type":"text"}`
+	body := `{"sender_id":"123","receiver_id":"456","content":"hello","type":"text"}`
 	rec := ut.PerformRequest(srv.Engine, "POST", "/kim/v1/c2c/messages",
 		&ut.Body{Body: strings.NewReader(body), Len: len(body)},
 		ut.Header{Key: "Content-Type", Value: "application/json"},

@@ -72,6 +72,13 @@ func (c *Client) Service() ServiceClient {
 	return c.service
 }
 
+func (c *Client) SendToUsers(ctx context.Context, req *kimgatev1.SendToUsersRequest) (*kimgatev1.SendResponse, error) {
+	if c == nil || c.service == nil {
+		return nil, errors.New("gateway client is nil")
+	}
+	return c.service.SendToUsers(ctx, req)
+}
+
 func (c *Client) Close() error {
 	if c == nil || c.conn == nil {
 		return nil

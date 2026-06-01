@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package kim.v1;
+
+option go_package = "github.com/project-kgo/kim/proto/kim/v1;kimv1";
+
+message C2CMessagePush {
+  int64 message_id = 1;
+  string conversation_id = 2;
+  string sender_id = 3;
+  string receiver_id = 4;
+  string content = 5;
+  string type = 6;
+  int64 created_at = 7;
+}

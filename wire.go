@@ -23,8 +23,11 @@ import (
 func Initialize(cfg config.Config, logger *slog.Logger) (*app.App, error) {
 	wire.Build(
 		ProvideData,
+		ProvideMessageStore,
 		ProvideSnowflakeNode,
 		ProvideMessageService,
+		ProvideMessagePusher,
+		ProvideConsumer,
 		ProvideEtcdClient,
 		ProvideEtcdRegistry,
 		etcddisc.ResolverBuilder,
@@ -46,6 +49,18 @@ func ProvideSnowflakeNode() (*snowflakex.Node, error) {
 
 func ProvideMessageService(logger *slog.Logger, node *snowflakex.Node, d *data.Data) *service.MessageService {
 	return service.NewMessageService(logger, node, d.PubSub)
+}
+
+func ProvideMessageStore(d *data.Data) *data.MessageStore {
+	return data.NewMessageStore(d.DB)
+}
+
+func ProvideMessagePusher(gatewayClient *gateway.Client) *service.MessagePusher {
+	return service.NewMessagePusher(gatewayClient)
+}
+
+func ProvideConsumer(logger *slog.Logger, store *data.MessageStore, d *data.Data, messagePusher *service.MessagePusher, node *snowflakex.Node) *service.Consumer {
+	return service.NewConsumer(logger, store, d.PubSub, messagePusher, node)
 }
 
 func ProvideEtcdClient(cfg config.Config) (*clientv3.Client, error) {

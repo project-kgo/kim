@@ -2,31 +2,50 @@ package service
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
 	"strconv"
 	"time"
 
 	"github.com/bytedance/sonic"
 	"github.com/kanengo/ku/mqx"
-	"github.com/project-kgo/kim/internal/data"
+	"github.com/kanengo/ku/snowflakex"
 	"github.com/project-kgo/kim/internal/event"
 	"github.com/project-kgo/kim/internal/model"
 )
 
+type C2CMessageRecord = model.C2CMessageRecord
+
+type c2cMessageStore interface {
+	SaveC2CMessage(ctx context.Context, record model.C2CMessageRecord) error
+}
+
+type c2cMessagePusher interface {
+	PushC2CMessage(ctx context.Context, evt event.MessageEvent) error
+}
+
 // Consumer 消息消费者，统一注册项目相关的 topic 回调
 type Consumer struct {
 	logger        *slog.Logger
-	messageStore  *data.MessageStore
+	messageStore  c2cMessageStore
 	pubsub        mqx.PubSub
+	messagePusher c2cMessagePusher
+	snowflakeNode *snowflakex.Node
 	subscriptions []mqx.Subscription
 }
 
 // NewConsumer 创建 Consumer 实例
-func NewConsumer(logger *slog.Logger, messageStore *data.MessageStore, pubsub mqx.PubSub) *Consumer {
+func NewConsumer(logger *slog.Logger, messageStore c2cMessageStore, pubsub mqx.PubSub, messagePusher c2cMessagePusher, snowflakeNode *snowflakex.Node) *Consumer {
+	if logger == nil {
+		logger = slog.Default()
+	}
 	return &Consumer{
-		logger:       logger,
-		messageStore: messageStore,
-		pubsub:       pubsub,
+		logger:        logger,
+		messageStore:  messageStore,
+		pubsub:        pubsub,
+		messagePusher: messagePusher,
+		snowflakeNode: snowflakeNode,
 	}
 }
 
@@ -48,7 +67,7 @@ func (c *Consumer) Register(ctx context.Context) error {
 	return nil
 }
 
-// handleC2CMessage 处理 C2C 消息：解析并存储到数据库
+// handleC2CMessage 处理 C2C 消息：落库、同步邮箱、会话列表和接收者推送
 func (c *Consumer) handleC2CMessage(ctx context.Context, msg *mqx.Message) error {
 	var evt event.MessageEvent
 	if err := sonic.Unmarshal(msg.Data, &evt); err != nil {
@@ -59,22 +78,57 @@ func (c *Consumer) handleC2CMessage(ctx context.Context, msg *mqx.Message) error
 	}
 
 	createdAt := time.UnixMilli(evt.CreatedAt)
+	if evt.CreatedAt <= 0 {
+		createdAt = time.Now()
+		evt.CreatedAt = createdAt.UnixMilli()
+	}
 
-	senderID, _ := strconv.ParseInt(evt.SenderID, 10, 64)
-	receiverID, _ := strconv.ParseInt(evt.ReceiverID, 10, 64)
+	senderID, err := strconv.ParseInt(evt.SenderID, 10, 64)
+	if err != nil {
+		return fmt.Errorf("parse sender_id: %w", err)
+	}
+	receiverID, err := strconv.ParseInt(evt.ReceiverID, 10, 64)
+	if err != nil {
+		return fmt.Errorf("parse receiver_id: %w", err)
+	}
+	conversationID, err := C2CConversationID(senderID, receiverID)
+	if err != nil {
+		return err
+	}
+	evt.ConversationID = conversationID
 
-	dbMsg := &model.Message{
+	jsonContent, err := jsonString(evt.Content)
+	if err != nil {
+		return err
+	}
+	if c.snowflakeNode == nil {
+		return errors.New("snowflake node is required")
+	}
+
+	dbMsg := model.Message{
 		ID:             evt.MessageID,
 		CreatedAt:      createdAt,
-		ConversationID: evt.ConversationID,
+		ConversationID: conversationID,
 		SenderID:       senderID,
 		ReceiverID:     receiverID,
-		Content:        evt.Content,
+		Content:        jsonContent,
 		Status:         1,
 		UpdatedAt:      createdAt,
 	}
 
-	if err := c.messageStore.SaveMessage(ctx, dbMsg); err != nil {
+	record := model.C2CMessageRecord{
+		Message: dbMsg,
+		SyncMails: []model.UserSyncMail{
+			newMessageSyncMail(c.snowflakeNode.Generate(), senderID, senderID, conversationID, evt.MessageID, evt.Content, createdAt),
+			newMessageSyncMail(c.snowflakeNode.Generate(), receiverID, senderID, conversationID, evt.MessageID, evt.Content, createdAt),
+		},
+		Conversations: []model.Conversation{
+			newConversation(senderID, receiverID, conversationID, evt.MessageID, evt.Content, 0, createdAt),
+			newConversation(receiverID, senderID, conversationID, evt.MessageID, evt.Content, 1, createdAt),
+		},
+	}
+
+	if err := c.messageStore.SaveC2CMessage(ctx, record); err != nil {
 		c.logger.ErrorContext(ctx, "failed to save message",
 			slog.Int64("message_id", evt.MessageID),
 			slog.String("error", err.Error()),
@@ -82,12 +136,69 @@ func (c *Consumer) handleC2CMessage(ctx context.Context, msg *mqx.Message) error
 		return err
 	}
 
+	if c.messagePusher == nil {
+		return errors.New("message pusher is required")
+	}
+	if err := c.messagePusher.PushC2CMessage(ctx, evt); err != nil {
+		c.logger.ErrorContext(ctx, "failed to push c2c message",
+			slog.Int64("message_id", evt.MessageID),
+			slog.String("receiver_id", evt.ReceiverID),
+			slog.String("error", err.Error()),
+		)
+		return err
+	}
+
 	c.logger.InfoContext(ctx, "message stored",
 		slog.Int64("message_id", evt.MessageID),
-		slog.String("conversation_id", evt.ConversationID),
+		slog.String("conversation_id", conversationID),
 	)
 
 	return nil
+}
+
+func C2CConversationID(senderID, receiverID int64) (string, error) {
+	if senderID <= 0 || receiverID <= 0 {
+		return "", errors.New("sender_id and receiver_id must be positive")
+	}
+	if senderID > receiverID {
+		senderID, receiverID = receiverID, senderID
+	}
+	return strconv.FormatInt(senderID, 10) + "-" + strconv.FormatInt(receiverID, 10), nil
+}
+
+func newMessageSyncMail(seq, userID, senderID int64, conversationID string, msgID int64, content string, createdAt time.Time) model.UserSyncMail {
+	return model.UserSyncMail{
+		SynSeq:         seq,
+		UserID:         userID,
+		CreatedAt:      createdAt,
+		SendID:         senderID,
+		ConversationID: conversationID,
+		SyncType:       1,
+		MsgID:          msgID,
+		Content:        content,
+	}
+}
+
+func newConversation(userID, targetID int64, conversationID string, msgID int64, preview string, unread int, now time.Time) model.Conversation {
+	return model.Conversation{
+		UserID:         userID,
+		ConversationID: conversationID,
+		LastMsgID:      msgID,
+		StartMsgID:     msgID,
+		Preview:        preview,
+		Unread:         unread,
+		CreatedAt:      now,
+		UpdatedAt:      now,
+		TargetID:       targetID,
+	}
+}
+
+func jsonString(content string) (string, error) {
+	raw, err := sonic.Marshal(content)
+	if err != nil {
+		return "", fmt.Errorf("encode message content: %w", err)
+	}
+	return string(raw), nil
 }
 
 // Close 关闭所有订阅

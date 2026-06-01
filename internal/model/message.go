@@ -7,7 +7,7 @@ type SendMessageRequest struct {
 	SenderID       string `json:"sender_id"`
 	ReceiverID     string `json:"receiver_id"`
 	Content        string `json:"content"`
-	Type           string `json:"type"`
+	MessageType    string `json:"message_type"`
 }
 
 // SendMessageResponse 发送消息响应体
@@ -37,4 +37,11 @@ type Message struct {
 	Content        string    `json:"content"`
 	Status         int       `json:"status"`
 	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+// C2CMessageRecord 聚合一条私聊消息消费时需要原子写入的数据。
+type C2CMessageRecord struct {
+	Message       Message        `json:"message"`
+	SyncMails     []UserSyncMail `json:"sync_mails"`
+	Conversations []Conversation `json:"conversations"`
 }

@@ -14,10 +14,6 @@ func (h *Handler) SendMessage(ctx context.Context, c *app.RequestContext) {
 		model.Error(c, model.CodeBadRequest, "invalid request body: "+err.Error())
 		return
 	}
-	if req.ConversationID == "" {
-		model.Error(c, model.CodeBadRequest, "conversation_id is required")
-		return
-	}
 	if req.SenderID == "" {
 		model.Error(c, model.CodeBadRequest, "sender_id is required")
 		return
