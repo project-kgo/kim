@@ -35,7 +35,7 @@ func (m *mockPubSub) Close() error { return nil }
 func newTestServer() *hertzserver.Hertz {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	node, _ := snowflakex.NewNode(1, 0)
-	messageService := service.NewMessageService(logger, node, &mockPubSub{})
+	messageService := service.NewMessageService(logger, node, &mockPubSub{}, nil)
 	h := handler.New(logger, messageService)
 	srv := hertzserver.New()
 	Register(srv, h, logger, "/kim")
@@ -44,7 +44,7 @@ func newTestServer() *hertzserver.Hertz {
 
 func TestSendMessageSuccess(t *testing.T) {
 	srv := newTestServer()
-	body := `{"sender_id":"123","receiver_id":"456","content":"hello","type":"text"}`
+	body := `{"client_msg_id":"client-1","sender_id":"123","receiver_id":"456","content":"hello","message_type":"text"}`
 	rec := ut.PerformRequest(srv.Engine, "POST", "/kim/v1/c2c/messages",
 		&ut.Body{Body: strings.NewReader(body), Len: len(body)},
 		ut.Header{Key: "Content-Type", Value: "application/json"},

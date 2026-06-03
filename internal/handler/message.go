@@ -2,9 +2,11 @@ package handler
 
 import (
 	"context"
+	"errors"
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/project-kgo/kim/internal/model"
+	"github.com/project-kgo/kim/internal/service"
 )
 
 // SendMessage 发送私聊消息
@@ -22,9 +24,17 @@ func (h *Handler) SendMessage(ctx context.Context, c *app.RequestContext) {
 		model.Error(c, model.CodeBadRequest, "receiver_id is required")
 		return
 	}
+	if req.ClientMsgID == "" {
+		model.Error(c, model.CodeBadRequest, "client_msg_id is required")
+		return
+	}
 
 	resp, err := h.messageService.Send(ctx, req)
 	if err != nil {
+		if errors.Is(err, service.ErrClientMessageConflict) {
+			model.Error(c, model.CodeBadRequest, "client_msg_id payload conflict")
+			return
+		}
 		model.Error(c, model.CodeInternalError, "failed to send message")
 		return
 	}

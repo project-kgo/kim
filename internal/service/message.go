@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -12,6 +14,7 @@ import (
 	"github.com/kanengo/ku/mqx"
 	"github.com/kanengo/ku/snowflakex"
 	kimgatev1 "github.com/project-kgo/kim-gate/proto/kimgate/v1"
+	"github.com/project-kgo/kim/internal/data"
 	"github.com/project-kgo/kim/internal/event"
 	"github.com/project-kgo/kim/internal/model"
 	kimv1 "github.com/project-kgo/kim/proto/kim/v1"
@@ -19,6 +22,9 @@ import (
 )
 
 const C2CMessagePushMethod = "message.c2c.new"
+const c2cDedupTTL = 5 * time.Minute
+
+var ErrClientMessageConflict = errors.New("client_msg_id payload conflict")
 
 type gatewayPusher interface {
 	SendToUsers(ctx context.Context, req *kimgatev1.SendToUsersRequest) (*kimgatev1.SendResponse, error)
@@ -65,14 +71,16 @@ type MessageService struct {
 	logger        *slog.Logger
 	snowflakeNode *snowflakex.Node
 	pubsub        mqx.PubSub
+	dedupStore    *data.MessageDedupStore
 }
 
 // NewMessageService 创建 MessageService 实例
-func NewMessageService(logger *slog.Logger, snowflakeNode *snowflakex.Node, pubsub mqx.PubSub) *MessageService {
+func NewMessageService(logger *slog.Logger, snowflakeNode *snowflakex.Node, pubsub mqx.PubSub, dedupStore *data.MessageDedupStore) *MessageService {
 	return &MessageService{
 		logger:        logger,
 		snowflakeNode: snowflakeNode,
 		pubsub:        pubsub,
+		dedupStore:    dedupStore,
 	}
 }
 
@@ -97,11 +105,27 @@ func (s *MessageService) Send(ctx context.Context, req model.SendMessageRequest)
 	payload := event.MessageEvent{
 		MessageID:      msgID,
 		ConversationID: conversationID,
+		ClientMsgID:    req.ClientMsgID,
 		SenderID:       req.SenderID,
 		ReceiverID:     req.ReceiverID,
 		Content:        req.Content,
 		Type:           req.MessageType,
 		CreatedAt:      now.UnixMilli(),
+	}
+
+	fingerprint := c2cMessageFingerprint(req)
+	if s.dedupStore != nil {
+		ok, err := s.dedupStore.ReserveC2CMessage(ctx, req.SenderID, req.ClientMsgID, data.MessageDedupValue{
+			MessageID:   msgIDStr,
+			CreatedAt:   now.Format(time.RFC3339),
+			Fingerprint: fingerprint,
+		}, c2cDedupTTL)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return s.handleDuplicateC2CMessage(ctx, req, fingerprint)
+		}
 	}
 
 	data, err := sonic.Marshal(payload)
@@ -118,6 +142,15 @@ func (s *MessageService) Send(ctx context.Context, req model.SendMessageRequest)
 		Data:        data,
 		ContentType: "application/json",
 	}); err != nil {
+		if s.dedupStore != nil {
+			if delErr := s.dedupStore.DeleteC2CMessage(ctx, req.SenderID, req.ClientMsgID); delErr != nil {
+				s.logger.WarnContext(ctx, "failed to delete c2c dedup key after publish failure",
+					slog.String("sender_id", req.SenderID),
+					slog.String("client_msg_id", req.ClientMsgID),
+					slog.String("error", delErr.Error()),
+				)
+			}
+		}
 		s.logger.ErrorContext(ctx, "failed to publish message",
 			slog.String("message_id", msgIDStr),
 			slog.String("error", err.Error()),
@@ -136,4 +169,27 @@ func (s *MessageService) Send(ctx context.Context, req model.SendMessageRequest)
 		MessageID: msgIDStr,
 		CreatedAt: now.Format(time.RFC3339),
 	}, nil
+}
+
+func (s *MessageService) handleDuplicateC2CMessage(ctx context.Context, req model.SendMessageRequest, fingerprint string) (*model.SendMessageResponse, error) {
+	value, err := s.dedupStore.GetC2CMessage(ctx, req.SenderID, req.ClientMsgID)
+	if err != nil {
+		return nil, err
+	}
+	if value.Fingerprint != fingerprint {
+		return nil, ErrClientMessageConflict
+	}
+	return &model.SendMessageResponse{
+		MessageID: value.MessageID,
+		CreatedAt: value.CreatedAt,
+	}, nil
+}
+
+func c2cMessageFingerprint(req model.SendMessageRequest) string {
+	h := sha256.New()
+	for _, part := range []string{req.SenderID, req.ReceiverID, req.Content, req.MessageType} {
+		_, _ = h.Write([]byte(part))
+		_, _ = h.Write([]byte{0})
+	}
+	return hex.EncodeToString(h.Sum(nil))
 }

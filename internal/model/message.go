@@ -4,6 +4,7 @@ import "time"
 
 type SendMessageRequest struct {
 	ConversationID string `json:"conversation_id"`
+	ClientMsgID    string `json:"client_msg_id"`
 	SenderID       string `json:"sender_id"`
 	ReceiverID     string `json:"receiver_id"`
 	Content        string `json:"content"`
@@ -20,6 +21,7 @@ type SendMessageResponse struct {
 type MessagePayload struct {
 	MessageID      string `json:"message_id"`
 	ConversationID string `json:"conversation_id"`
+	ClientMsgID    string `json:"client_msg_id"`
 	SenderID       string `json:"sender_id"`
 	ReceiverID     string `json:"receiver_id"`
 	Content        string `json:"content"`

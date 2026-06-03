@@ -15,10 +15,11 @@ import (
 func TestSendGeneratesC2CConversationID(t *testing.T) {
 	pubsub := &recordingPubSub{}
 	node, _ := snowflakex.NewNode(1, 0)
-	svc := NewMessageService(slog.Default(), node, pubsub)
+	svc := NewMessageService(slog.Default(), node, pubsub, nil)
 
 	resp, err := svc.Send(context.Background(), model.SendMessageRequest{
 		ConversationID: "client-wrong",
+		ClientMsgID:    "client-1",
 		SenderID:       "10",
 		ReceiverID:     "2",
 		Content:        "hello",
@@ -40,13 +41,20 @@ func TestSendGeneratesC2CConversationID(t *testing.T) {
 	if evt.ConversationID != "2-10" {
 		t.Fatalf("conversation_id = %q, want 2-10", evt.ConversationID)
 	}
+	if evt.ClientMsgID != "client-1" {
+		t.Fatalf("client_msg_id = %q, want client-1", evt.ClientMsgID)
+	}
 }
 
 type recordingPubSub struct {
 	published []*mqx.PublishRequest
+	err       error
 }
 
 func (r *recordingPubSub) Publish(_ context.Context, req *mqx.PublishRequest) error {
+	if r.err != nil {
+		return r.err
+	}
 	r.published = append(r.published, req)
 	return nil
 }

@@ -24,6 +24,7 @@ func Initialize(cfg config.Config, logger *slog.Logger) (*app.App, error) {
 	wire.Build(
 		ProvideData,
 		ProvideMessageStore,
+		ProvideMessageDedupStore,
 		ProvideSnowflakeNode,
 		ProvideMessageService,
 		ProvideMessagePusher,
@@ -47,12 +48,16 @@ func ProvideSnowflakeNode() (*snowflakex.Node, error) {
 	return snowflakex.NewNode(1, 0)
 }
 
-func ProvideMessageService(logger *slog.Logger, node *snowflakex.Node, d *data.Data) *service.MessageService {
-	return service.NewMessageService(logger, node, d.PubSub)
+func ProvideMessageService(logger *slog.Logger, node *snowflakex.Node, d *data.Data, dedupStore *data.MessageDedupStore) *service.MessageService {
+	return service.NewMessageService(logger, node, d.PubSub, dedupStore)
 }
 
 func ProvideMessageStore(d *data.Data) *data.MessageStore {
 	return data.NewMessageStore(d.DB)
+}
+
+func ProvideMessageDedupStore(d *data.Data) *data.MessageDedupStore {
+	return data.NewMessageDedupStore(d.Redis)
 }
 
 func ProvideMessagePusher(gatewayClient *gateway.Client) *service.MessagePusher {

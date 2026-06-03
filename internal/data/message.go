@@ -115,10 +115,19 @@ func upsertConversation(ctx context.Context, tx *sqlx.Tx, conversation model.Con
 
 	result, err := tx.NamedExecContext(ctx,
 		`UPDATE dim.conversations
-		 SET last_msg_id = :last_msg_id,
-		     preview = :preview,
+		 SET last_msg_id = CASE
+		     	WHEN :last_msg_id > last_msg_id THEN :last_msg_id
+		     	ELSE last_msg_id
+		     END,
+		     preview = CASE
+		     	WHEN :last_msg_id > last_msg_id THEN :preview
+		     	ELSE preview
+		     END,
 		     unread = unread + :unread,
-		     updated_at = :updated_at,
+		     updated_at = CASE
+		     	WHEN :last_msg_id > last_msg_id THEN :updated_at
+		     	ELSE updated_at
+		     END,
 		     target_id = :target_id
 		 WHERE user_id = :user_id AND conversation_id = :conversation_id`,
 		conversation,
