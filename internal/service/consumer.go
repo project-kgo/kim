@@ -77,12 +77,6 @@ func (c *Consumer) handleC2CMessage(ctx context.Context, msg *mqx.Message) error
 		return err
 	}
 
-	createdAt := time.UnixMilli(evt.CreatedAt)
-	if evt.CreatedAt <= 0 {
-		createdAt = time.Now()
-		evt.CreatedAt = createdAt.UnixMilli()
-	}
-
 	senderID, err := strconv.ParseInt(evt.SenderID, 10, 64)
 	if err != nil {
 		return fmt.Errorf("parse sender_id: %w", err)
@@ -104,27 +98,33 @@ func (c *Consumer) handleC2CMessage(ctx context.Context, msg *mqx.Message) error
 	if c.snowflakeNode == nil {
 		return errors.New("snowflake node is required")
 	}
+	if evt.MessageID <= 0 {
+		return errors.New("message_id must be positive")
+	}
+
+	messageCreatedAt := c.snowflakeNode.GetTime(evt.MessageID)
+	evt.CreatedAt = messageCreatedAt.UnixMilli()
 
 	dbMsg := model.Message{
 		ID:             evt.MessageID,
-		CreatedAt:      createdAt,
+		CreatedAt:      messageCreatedAt,
 		ConversationID: conversationID,
 		SenderID:       senderID,
 		ReceiverID:     receiverID,
 		Content:        jsonContent,
 		Status:         1,
-		UpdatedAt:      createdAt,
+		UpdatedAt:      messageCreatedAt,
 	}
 
 	record := model.C2CMessageRecord{
 		Message: dbMsg,
 		SyncMails: []model.UserSyncMail{
-			newMessageSyncMail(c.snowflakeNode.Generate(), senderID, senderID, conversationID, evt.MessageID, evt.Content, createdAt),
-			newMessageSyncMail(c.snowflakeNode.Generate(), receiverID, senderID, conversationID, evt.MessageID, evt.Content, createdAt),
+			newMessageSyncMail(c.snowflakeNode, senderID, senderID, conversationID, evt.MessageID, evt.Content),
+			newMessageSyncMail(c.snowflakeNode, receiverID, senderID, conversationID, evt.MessageID, evt.Content),
 		},
 		Conversations: []model.Conversation{
-			newConversation(senderID, receiverID, conversationID, evt.MessageID, evt.Content, 0, createdAt),
-			newConversation(receiverID, senderID, conversationID, evt.MessageID, evt.Content, 1, createdAt),
+			newConversation(senderID, receiverID, conversationID, evt.MessageID, evt.Content, 0, messageCreatedAt),
+			newConversation(receiverID, senderID, conversationID, evt.MessageID, evt.Content, 1, messageCreatedAt),
 		},
 	}
 
@@ -166,11 +166,12 @@ func C2CConversationID(senderID, receiverID int64) (string, error) {
 	return strconv.FormatInt(senderID, 10) + "-" + strconv.FormatInt(receiverID, 10), nil
 }
 
-func newMessageSyncMail(seq, userID, senderID int64, conversationID string, msgID int64, content string, createdAt time.Time) model.UserSyncMail {
+func newMessageSyncMail(node *snowflakex.Node, userID, senderID int64, conversationID string, msgID int64, content string) model.UserSyncMail {
+	seq := node.Generate()
 	return model.UserSyncMail{
 		SynSeq:         seq,
 		UserID:         userID,
-		CreatedAt:      createdAt,
+		CreatedAt:      node.GetTime(seq),
 		SendID:         senderID,
 		ConversationID: conversationID,
 		SyncType:       1,

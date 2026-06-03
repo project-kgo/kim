@@ -51,15 +51,17 @@ func TestC2CConversationID(t *testing.T) {
 
 func TestHandleC2CMessagePersistsThenPushesReceiver(t *testing.T) {
 	ctx := context.Background()
-	createdAt := time.Date(2026, 5, 31, 10, 0, 0, 0, time.UTC)
+	node, _ := snowflakex.NewNode(1, 0)
+	msgID := node.Generate()
+	eventCreatedAt := time.Date(2026, 5, 31, 10, 0, 0, 0, time.UTC)
 	evt := event.MessageEvent{
-		MessageID:      1001,
+		MessageID:      msgID,
 		ConversationID: "client-wrong",
 		SenderID:       "10",
 		ReceiverID:     "2",
 		Content:        "hello",
 		Type:           "text",
-		CreatedAt:      createdAt.UnixMilli(),
+		CreatedAt:      eventCreatedAt.UnixMilli(),
 	}
 	raw, err := sonic.Marshal(evt)
 	if err != nil {
@@ -69,7 +71,6 @@ func TestHandleC2CMessagePersistsThenPushesReceiver(t *testing.T) {
 	store := &fakeC2CStore{}
 	gateway := &fakeGatewayPusher{}
 	pusher := NewMessagePusher(gateway)
-	node, _ := snowflakex.NewNode(1, 0)
 	consumer := NewConsumer(slog.Default(), store, &fakeConsumerPubSub{}, pusher, node)
 
 	if err := consumer.handleC2CMessage(ctx, &mqx.Message{Data: raw}); err != nil {
@@ -86,11 +87,19 @@ func TestHandleC2CMessagePersistsThenPushesReceiver(t *testing.T) {
 	if got.Message.Content != `"hello"` {
 		t.Fatalf("stored content = %q, want JSON string", got.Message.Content)
 	}
+	if want := node.GetTime(msgID); !got.Message.CreatedAt.Equal(want) {
+		t.Fatalf("message created_at = %v, want snowflake time %v", got.Message.CreatedAt, want)
+	}
 	if len(got.SyncMails) != 2 {
 		t.Fatalf("sync mail count = %d, want 2", len(got.SyncMails))
 	}
 	if got.SyncMails[0].UserID != 10 || got.SyncMails[1].UserID != 2 {
 		t.Fatalf("sync mail users = %d,%d want sender then receiver", got.SyncMails[0].UserID, got.SyncMails[1].UserID)
+	}
+	for i, mail := range got.SyncMails {
+		if want := node.GetTime(mail.SynSeq); !mail.CreatedAt.Equal(want) {
+			t.Fatalf("sync mail %d created_at = %v, want snowflake time %v", i, mail.CreatedAt, want)
+		}
 	}
 	if len(got.Conversations) != 2 {
 		t.Fatalf("conversation count = %d, want 2", len(got.Conversations))
